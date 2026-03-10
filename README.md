@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Options Trader POC
 
 This repository contains a first-pass implementation of the options trader proof of concept. It keeps the trading logic in a Python service and leaves orchestration, approvals, and notifications to n8n.
@@ -59,3 +60,7 @@ Tradier sandbox option data may not always include Greeks. The strategy engine p
 2. Midday and afternoon schedules call `POST /positions/evaluate-exits`.
 3. End-of-day schedule calls `GET /summary/daily`.
 4. Telegram or email notifications summarize entries, exits, and the daily journal.
+=======
+# OptionTraderCDX
+Option Automation
+>>>>>>> origin/main
