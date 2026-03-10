@@ -1,0 +1,280 @@
+{
+  "name": "Options Trader POC Automated Cycle",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "35 9 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "entry-schedule",
+      "name": "Entry Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 220]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/jobs/scan-and-submit",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"auto_submit\": true\n}"
+      },
+      "id": "run-entry-cycle",
+      "name": "Run Entry Cycle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.submissions.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "larger"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "has-entry-submissions",
+      "name": "Submitted Entries?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [760, 220]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "=Entry cycle complete. Decisions: {{ $json.decisions.length }}. Submissions: {{ JSON.stringify($json.submissions) }}"
+      },
+      "id": "notify-entry",
+      "name": "Notify Entry Results",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1020, 160]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "15 13,15 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "exit-schedule",
+      "name": "Exit Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 500]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/positions/evaluate-exits",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"use_live_data\": true,\n  \"price_map\": {}\n}"
+      },
+      "id": "run-exit-cycle",
+      "name": "Run Exit Cycle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.evaluations.filter((e) => e.action === 'close').length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "larger"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "has-exit-actions",
+      "name": "Exit Actions?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [760, 500]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "=Exit cycle complete. Actions: {{ JSON.stringify($json.evaluations.filter((e) => e.action === 'close')) }}"
+      },
+      "id": "notify-exits",
+      "name": "Notify Exit Results",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1020, 440]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "10 16 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "summary-schedule",
+      "name": "Summary Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 760]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/summary/daily",
+        "method": "GET"
+      },
+      "id": "fetch-summary",
+      "name": "Fetch Daily Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 760]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "chatId": "={{$env.TELEGRAM_CHAT_ID}}",
+        "text": "=Daily summary: {{ JSON.stringify($json) }}"
+      },
+      "id": "notify-summary",
+      "name": "Notify Summary",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [760, 760]
+    }
+  ],
+  "connections": {
+    "Entry Schedule": {
+      "main": [
+        [
+          {
+            "node": "Run Entry Cycle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Entry Cycle": {
+      "main": [
+        [
+          {
+            "node": "Submitted Entries?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Submitted Entries?": {
+      "main": [
+        [
+          {
+            "node": "Notify Entry Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Exit Schedule": {
+      "main": [
+        [
+          {
+            "node": "Run Exit Cycle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Exit Cycle": {
+      "main": [
+        [
+          {
+            "node": "Exit Actions?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Exit Actions?": {
+      "main": [
+        [
+          {
+            "node": "Notify Exit Results",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Summary Schedule": {
+      "main": [
+        [
+          {
+            "node": "Fetch Daily Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Daily Summary": {
+      "main": [
+        [
+          {
+            "node": "Notify Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

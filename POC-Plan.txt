@@ -1,0 +1,202 @@
+Here’s a **simplified proof-of-concept (POC)** that gets you trading *for real (paper)* fast, without getting bogged down. It’s intentionally boring and robust: **one universe, one core strategy, one hedge, one risk engine, one dashboard**. Then you add 7DTE and 0DTE as “plugins” later.
+
+---
+
+## The simplest POC that still feels “real”
+
+### What it trades
+
+**Universe (fixed at first):**
+
+* Start with **SPY + QQQ** (later add IWM, TLT, GLD, XLF, etc.)
+
+Why: super liquid options, tight spreads, clean fills. This keeps your early results about *strategy logic*, not garbage data/execution.
+
+### What it does (one core strategy)
+
+**Core strategy (30–45 DTE):** *Defined-risk credit spreads*
+
+* If trend is up/neutral → **Bull Put Credit Spread**
+* If trend is down/neutral → **Bear Call Credit Spread**
+
+That’s it for v1.
+
+### What it avoids (for v1)
+
+* No condors, no diagonals, no assignments complexity, no 0DTE initially.
+* No “AI predicts price.” The “agent” is a rules engine with explainability.
+
+---
+
+## POC trading rules (v1)
+
+### Regime signal (simple)
+
+* **Trend filter:** price vs 50-day moving average
+
+  * Above → bullish bias
+  * Below → bearish bias
+* **Vol filter:** use **IV rank or IV vs realized vol** if you have it (optional in v1)
+
+If you don’t have IV data easily at first, still do it — your POC can run using delta-based strike selection and a simple “don’t trade during earnings” rule (earnings is irrelevant for SPY/QQQ anyway).
+
+### Entry rules (credit spreads)
+
+* **DTE:** 30–45
+* **Short strike selection:** target ~**0.15–0.25 delta**
+* **Width:** fixed (e.g., $5 wide SPY / QQQ)
+* **Order type:** limit order (mid or slightly worse)
+
+### Exit rules
+
+* **Take profit:** at **50%** of credit captured
+* **Stop loss:** at **2× credit** (or a hard max loss per trade)
+* **Time exit:** close at **21 DTE** if still open
+
+### Risk rules (make this non-negotiable)
+
+* Risk per trade: **0.5%** of account (configurable)
+* Max total open risk: **3%** of account
+* Max one position per underlying at a time
+
+---
+
+## “Insurance” hedge in the POC (yes, but tiny + budgeted)
+
+I would include a tail hedge **only if you cap the bleed**. The clean POC version is:
+
+### Tail hedge (monthly)
+
+* Once per month, buy a **far OTM put spread** on SPY or QQQ
+
+  * Example: 45–75 DTE put spread, very small size
+* **Budget:** max **0.25%–0.5% of account per month**
+* If volatility spikes and hedge value jumps, **take profits** (don’t diamond-hand the hedge back down)
+
+Why put *spread* (not naked far OTM put): reduces constant premium bleed while still giving crash convexity.
+
+---
+
+## What a “POC agent” actually looks like (components)
+
+### 1) Data + Broker (paper)
+
+Pick one of these paths:
+
+**Option A (easiest paper trading API): Tradier**
+
+* Tradier provides a **sandbox/paper environment** and docs for paper trading endpoints. ([Tradier API][1])
+
+**Option B (most “realistic” execution): IBKR**
+
+* IBKR’s TWS API / Client Portal API are widely used for automation and are well documented. ([Interactive Brokers][2])
+
+**Data source (if broker data isn’t enough):**
+
+* Polygon has options tooling/docs; Cboe DataShop and similar vendors exist for options datasets (often delayed/licensed). ([Polygon Documentation][3])
+
+POC tip: **use broker quotes for trading decisions** first. Add external historical options datasets later if/when you build a serious backtester.
+
+---
+
+## The POC architecture (minimal, buildable in a week)
+
+### Stack (simple + proven)
+
+* **Python**
+* **FastAPI** (agent service)
+* **SQLite** (store decisions/trades/positions)
+* **A scheduler** (cron / APScheduler)
+* Optional: **Streamlit** (quick dashboard)
+
+### Services/modules
+
+1. **Universe module**
+
+   * returns: [SPY, QQQ]
+
+2. **Signal module**
+
+   * computes: trend bias (above/below MA), optional vol filter
+
+3. **Strategy module**
+
+   * given bias → builds spread candidates
+   * selects strikes by delta + liquidity constraints
+
+4. **Risk engine**
+
+   * position sizing, max exposure, “can I trade?” gatekeeper
+
+5. **Broker adapter**
+
+   * quote chain → place multi-leg order → track fills → positions
+
+6. **Journal + dashboard**
+
+   * every decision logged with “why” and parameters
+
+---
+
+## What the POC outputs every day (the “explainable agent”)
+
+For each symbol, the agent emits a decision object like:
+
+* **Symbol:** SPY
+* **Regime:** bullish
+* **Action:** open bull put credit spread
+* **DTE:** 37
+* **Short strike:** ~0.20 delta
+* **Credit:** $X
+* **Max risk:** $Y
+* **Exit plan:** TP 50%, SL 2× credit, close at 21 DTE
+* **Reason:** trend filter + risk limits satisfied + liquidity ok
+
+This is huge: it lets you tweak rules and instantly see why the agent did something.
+
+---
+
+## How you expand from the POC (plug-in style)
+
+### Add 7 DTE (v2)
+
+Keep it as a *small satellite*:
+
+* Same spread logic, but:
+
+  * size at **25–40%** of core risk
+  * exit sooner (profit faster, stop tighter)
+  * never hold into final 3 DTE
+
+### Add 0 DTE (v3)
+
+Only after v1/v2 are stable.
+
+* Defined-risk only
+* Strict time windows + hard stops
+* Tiny size (0–5% of activity)
+
+---
+
+## Tooling checklist (POC)
+
+**Must-have**
+
+* Broker paper API (Tradier sandbox or IBKR paper)
+* Python + FastAPI
+* SQLite
+* Logging + alerts (email/Telegram)
+
+**Nice-to-have**
+
+* Streamlit dashboard
+* Docker (deploy on VPS)
+* Backtesting library (later)
+
+---
+
+If you tell me which route you want for paper execution (**Tradier sandbox vs IBKR paper**), I’ll give you the exact **POC build plan** (endpoints, data objects, database tables, and the first 3 cron jobs) so you can start implementing immediately.
+
+[1]: https://docs.tradier.com/docs/getting-started?utm_source=chatgpt.com "Tradier Brokerage API"
+[2]: https://www.interactivebrokers.com/campus/ibkr-api-page/trader-workstation-api/?utm_source=chatgpt.com "TWS API Documentation"
+[3]: https://polygon.readthedocs.io/en/latest/Options.html?utm_source=chatgpt.com "Options — polygon 1.2.8 documentation"
