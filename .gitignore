@@ -17,3 +17,5 @@ cloudflared.out
 tunnel.log
 tunnel*.out
 tunnel*.err
+
+src/*.egg-info/
